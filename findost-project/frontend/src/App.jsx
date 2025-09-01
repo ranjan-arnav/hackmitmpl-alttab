@@ -12,6 +12,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Dialog, Transition } from '@headlessui/react';
 import { Line, Doughnut } from 'react-chartjs-2';
+import ReactMarkdown from 'react-markdown';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -2685,7 +2686,17 @@ function ChatView({ session, profile }) {
                           : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{msg.message}</p>
+                      {msg.isUser ? (
+                        <p>{msg.message}</p>
+                      ) : (
+                        msg.isLoading ? (
+                          <PulseLoader color="#a5b4fc" size={8} />
+                        ) : (
+                          <div className="prose prose-sm prose-invert max-w-none">
+                            <ReactMarkdown>{msg.message}</ReactMarkdown>
+                          </div>
+                        )
+                      )}
                     </div>
                     
                     {isUser && showTime && (

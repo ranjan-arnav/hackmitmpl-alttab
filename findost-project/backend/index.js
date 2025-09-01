@@ -37,18 +37,46 @@ app.post('/chat', async (req, res) => {
 
     // Create system prompt with user profile
     const userProfile = profile || {};
-    const systemPrompt = `You are 'FinDost,' a world-class AI financial coach for young adults in India. 
-    Your persona is empathetic, encouraging, and clear. You must avoid all financial jargon and explain complex topics simply. 
-    Your goal is to build the user's confidence. Always include a disclaimer to consult a professional for major decisions. 
-    Personalize your advice using the user's profile: 
-    Name: ${userProfile.full_name || 'Unknown'}, 
-    Age: ${userProfile.age || 'Unknown'}, 
-    Profession: ${userProfile.profession || 'Unknown'}, 
-    Monthly Salary: ₹${userProfile.monthly_salary_inr || 'Unknown'}`;
 
-    // Initialize the model
+    // --- Stage 1: Content Moderation ---
+    const moderationModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const moderationPrompt = `Is the following question about personal finance (budgeting, saving, investing, debt, salary, etc.)? Answer with only "yes" or "no". Question: "${message}"`;
+    const moderationResult = await moderationModel.generateContent(moderationPrompt);
+    const moderationResponse = await moderationResult.response;
+    const moderationText = moderationResponse.text().trim().toLowerCase();
+
+    if (!moderationText.includes('yes')) {
+      // If not a financial question, send a canned response and stop.
+      const cannedResponses = [
+        "As FinDost, my focus is solely on personal finance. I can't answer that, but I'm ready to help with any money-related questions you have!",
+        "My purpose is to help you with your finances. I can't provide information on other topics, but I can help you with budgeting, saving, or investing.",
+        "That's outside of my area of expertise. I am FinDost, your personal finance assistant. How can I help you with your financial goals today?"
+      ];
+      const randomResponse = cannedResponses[Math.floor(Math.random() * cannedResponses.length)];
+      return res.json({ reply: randomResponse });
+    }
+
+    // --- Stage 2: Financial Response ---
+    // If moderation passes, proceed to get a financial answer.
+    const systemPrompt = `
+    **CRITICAL RULE: You are FinDost, a financial AI assistant. Your ONLY function is to answer questions about personal finance.**
+    **Persona for Financial Questions:**
+    - You are an empathetic, encouraging, and clear financial coach for young adults in India.
+    - Explain complex topics simply, without jargon.
+    - Your goal is to build the user's confidence.
+    - Personalize your advice using the user's profile:
+        - Name: ${userProfile.full_name || 'Not provided'}
+        - Age: ${userProfile.age || 'Not provided'}
+        - Profession: ${userProfile.profession || 'Not provided'}
+        - Monthly Salary: ₹${userProfile.monthly_salary_inr || 'Not provided'}
+    **MANDATORY DISCLAIMER:**
+    - For ALL financial-related answers, you MUST end your response with this exact disclaimer: "Remember, I'm an AI assistant. It's a good idea to consult with a qualified financial advisor for major decisions."
+    `;
+
+    // Initialize the model for the main response
     const model = genAI.getGenerativeModel({
-      model: "gemini-pro",
+      model: "gemini-1.5-flash",
+      systemInstruction: systemPrompt
     });
 
     // Format chat history for the model
@@ -66,7 +94,6 @@ app.post('/chat', async (req, res) => {
       generationConfig: {
         maxOutputTokens: 1000,
       },
-      systemInstruction: systemPrompt,
     });
 
     // Send message to model and get response
